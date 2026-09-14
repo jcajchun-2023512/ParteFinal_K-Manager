@@ -61,6 +61,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // Dynamic Financial Data (from PostgreSQL via DashboardService)
   readonly totalIngresos = signal<string>('Q0.00');
   readonly totalEgresos = signal<string>('Q0.00');
+  readonly saldo = signal<string>('Q0.00');
+  readonly currentBalance = signal<number>(0);
   readonly ingresosTrend = signal<string>('+12.5% este mes');
   readonly porcentajeAhorro = signal<number>(0);
   readonly ahorradoMes = signal<string>('Q0.00');
@@ -164,6 +166,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (summary: DashboardSummary) => {
         this.totalIngresos.set(summary.totalIngresos);
         this.totalEgresos.set(summary.totalEgresos);
+        this.saldo.set(summary.saldo ?? 'Q0.00');
+        this.currentBalance.set(summary.balance ?? 0);
         this.ingresosTrend.set(summary.ingresosTrend);
         this.porcentajeAhorro.set(summary.porcentajeAhorro);
         this.ahorradoMes.set(summary.ahorradoMes);
@@ -282,6 +286,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (type === 'expense') {
+      if (this.currentBalance() <= 0) {
+        this.showToast('No puedes registrar un egreso porque no tienes dinero disponible en tu cuenta.', 'error');
+        return;
+      }
+      if (amount > this.currentBalance()) {
+        this.showToast(
+          `Saldo insuficiente. Tu saldo disponible es de ${this.saldo()} y no cubre el egreso de Q${amount.toFixed(2)}.`,
+          'error'
+        );
+        return;
+      }
+    }
+
     this.isSubmitting.set(true);
     this.dashboardService
       .createTransaction({
@@ -367,6 +385,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   onQuickExpenseItemClick(item: QuickExpense): void {
+    if (this.currentBalance() <= 0) {
+      this.showToast(
+        'No puedes realizar este egreso fijo porque no tienes dinero disponible en tu cuenta.',
+        'error'
+      );
+      return;
+    }
     this.openNewOperationModal(
       'expense',
       `Pago de ${item.title}`,
@@ -444,6 +469,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (!amount || amount <= 0) {
       this.showToast('Por favor, ingresa un monto válido mayor a 0.', 'error');
       return;
+    }
+
+    if (type === 'expense') {
+      const isPositive = this.editingItem()?.isPositive;
+      const oldCleaned = (this.editingItem()?.amount || '').replace(/[^0-9.]/g, '');
+      const oldAmount = parseFloat(oldCleaned) || 0;
+      const available = isPositive
+        ? this.currentBalance() - oldAmount
+        : this.currentBalance() + oldAmount;
+
+      if (available <= 0) {
+        this.showToast('No puedes modificar a egreso porque no tienes dinero disponible en tu cuenta.', 'error');
+        return;
+      }
+      if (amount > available) {
+        this.showToast(
+          `Saldo insuficiente. El saldo disponible para este egreso es de Q${available.toFixed(2)}.`,
+          'error'
+        );
+        return;
+      }
     }
 
     this.isEditSubmitting.set(true);

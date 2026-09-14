@@ -60,10 +60,19 @@ export async function initializeDatabase(): Promise<void> {
         id SERIAL PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
         email VARCHAR(100) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
+        password_hash VARCHAR(255),
         role VARCHAR(20) NOT NULL DEFAULT 'User',
+        google_id VARCHAR(100) UNIQUE,
+        avatar_url VARCHAR(255),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // Migración retrocompatible para bases de datos existentes
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(100) UNIQUE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255);
+      ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
     `);
 
     // 2. Tabla de Categorías

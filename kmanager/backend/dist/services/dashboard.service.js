@@ -53,6 +53,7 @@ class DashboardService {
                 title: t.title,
                 subtitle: t.subtitle || t.categoryName || (isPositive ? 'Ingreso Principal' : 'Gasto General'),
                 date: t.transactionDate,
+                rawDate: t.rawDate,
                 status: t.status,
                 statusClass,
                 amount: `${isPositive ? '+' : '-'}Q${t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
@@ -62,9 +63,12 @@ class DashboardService {
                 categoryId: t.categoryId,
             };
         });
+        const currentBalance = totals.balance;
         return {
             totalIngresos: `Q${totals.totalIncome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             totalEgresos: `Q${totals.totalExpense.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            saldo: `Q${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            balance: currentBalance,
             ingresosTrend: '+12.5% este mes',
             porcentajeAhorro: savingPercentage,
             ahorradoMes: `Q${netSavings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
@@ -72,8 +76,8 @@ class DashboardService {
             monthlyHistory: formattedHistory,
         };
     }
-    async getTransactions(userId) {
-        return transaction_repository_1.transactionRepository.findByUserId(userId);
+    async getTransactions(userId, filters) {
+        return transaction_repository_1.transactionRepository.findByUserId(userId, filters);
     }
     async createTransaction(userId, dto) {
         if (!dto.title || !dto.amount || !dto.type) {
@@ -82,11 +86,67 @@ class DashboardService {
         if (dto.amount <= 0) {
             throw new Error('El monto debe ser un valor positivo mayor a 0');
         }
+        // Validación financiera: si es un egreso, el cliente no puede realizarlo si no tiene dinero dentro
+        if (dto.type === 'expense' && dto.status !== 'Cancelado') {
+            const totals = await transaction_repository_1.transactionRepository.getTotalsByUserId(userId);
+            const availableBalance = totals.balance;
+            if (availableBalance <= 0) {
+                throw new Error('No puedes registrar ningún egreso porque no tienes dinero disponible en tu cuenta (Saldo: Q0.00). Registra un ingreso primero.');
+            }
+            if (dto.amount > availableBalance) {
+                throw new Error(`Saldo insuficiente. Tu saldo disponible es de Q${availableBalance.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                })} y no cubre el egreso solicitado de Q${dto.amount.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                })}.`);
+            }
+        }
         return transaction_repository_1.transactionRepository.create(userId, dto);
     }
     async updateTransaction(userId, id, dto) {
         if (dto.amount !== undefined && dto.amount <= 0) {
             throw new Error('El monto debe ser un valor positivo mayor a 0');
+        }
+        const existing = await transaction_repository_1.transactionRepository.findById(id, userId);
+        if (!existing) {
+            throw new Error('Transacción no encontrada o sin permisos para editarla');
+        }
+        const targetType = dto.type !== undefined ? dto.type : existing.type;
+        const targetAmount = dto.amount !== undefined ? dto.amount : existing.amount;
+        const targetStatus = dto.status !== undefined ? dto.status : existing.status;
+        // Calcular el balance sin esta transacción para verificar si el cambio es viable
+        const totals = await transaction_repository_1.transactionRepository.getTotalsByUserId(userId);
+        let netIncomeWithoutTx = totals.totalIncome;
+        let netExpenseWithoutTx = totals.totalExpense;
+        if (existing.status !== 'Cancelado') {
+            if (existing.type === 'income')
+                netIncomeWithoutTx -= existing.amount;
+            if (existing.type === 'expense')
+                netExpenseWithoutTx -= existing.amount;
+        }
+        const balanceWithoutTx = netIncomeWithoutTx - netExpenseWithoutTx;
+        if (targetStatus !== 'Cancelado') {
+            if (targetType === 'expense') {
+                if (balanceWithoutTx <= 0) {
+                    throw new Error('No puedes registrar o cambiar a este egreso porque no tienes dinero disponible en tu cuenta.');
+                }
+                if (targetAmount > balanceWithoutTx) {
+                    throw new Error(`Saldo insuficiente. Tu saldo disponible para este egreso es de Q${balanceWithoutTx.toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                    })} y no cubre el monto de Q${targetAmount.toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                    })}.`);
+                }
+            }
+            else if (targetType === 'income') {
+                if (balanceWithoutTx + targetAmount < 0) {
+                    throw new Error('No puedes reducir este ingreso ya que los egresos existentes superarían el dinero disponible.');
+                }
+            }
         }
         const updated = await transaction_repository_1.transactionRepository.update(id, userId, dto);
         if (!updated) {
@@ -95,6 +155,17 @@ class DashboardService {
         return updated;
     }
     async deleteTransaction(userId, id) {
+        const existing = await transaction_repository_1.transactionRepository.findById(id, userId);
+        if (!existing) {
+            return false;
+        }
+        if (existing.type === 'income' && existing.status !== 'Cancelado') {
+            const totals = await transaction_repository_1.transactionRepository.getTotalsByUserId(userId);
+            const balanceAfterDelete = totals.totalIncome - existing.amount - totals.totalExpense;
+            if (balanceAfterDelete < 0) {
+                throw new Error('No puedes eliminar este ingreso porque los egresos ya realizados superan el dinero remanente.');
+            }
+        }
         return transaction_repository_1.transactionRepository.delete(id, userId);
     }
     async getCategories() {

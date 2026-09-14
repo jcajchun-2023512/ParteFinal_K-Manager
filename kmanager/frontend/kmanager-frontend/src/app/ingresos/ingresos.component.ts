@@ -9,6 +9,7 @@ import { DashboardService } from '../dashboard/services/dashboard.service';
 import {
   DashboardSummary,
   MonthlyHistoryItem,
+  TransactionItem,
   Category,
   UpdateTransactionDto,
 } from '../dashboard/models/dashboard.model';
@@ -18,6 +19,9 @@ export interface ChartPoint {
   x: number;
   y: number;
   label: string;
+  amount: number;
+  amountFormatted: string;
+  percentage: number;
 }
 
 @Component({
@@ -37,6 +41,7 @@ export class IngresosComponent implements OnInit, OnDestroy {
   readonly totalIngresos = signal<string>('Q0.00');
   readonly ingresosTrend = signal<string>('+12.5%');
   readonly incomeTransactions = signal<MonthlyHistoryItem[]>([]);
+  readonly allRawIncomes = signal<TransactionItem[]>([]);
   readonly categories = signal<Category[]>(DEFAULT_CATEGORIES);
   readonly isLoading = signal<boolean>(true);
   readonly selectedPeriod = signal<'6m' | '1y'>('6m');
@@ -47,61 +52,84 @@ export class IngresosComponent implements OnInit, OnDestroy {
     return list.length > 0;
   });
 
-  // Dynamic Month Labels (calculated backward from current month in Spanish)
-  readonly chartMonthLabels = computed<string[]>(() => {
+  // Dynamic Month Objects (calculated backward from current month: { label, year, month })
+  readonly chartMonths = computed<Array<{ label: string; year: number; month: number }>>(() => {
     const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const count = this.selectedPeriod() === '6m' ? 6 : 12;
-    const currentMonthIdx = new Date().getMonth();
-    const labels: string[] = [];
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0..11
+    const months: Array<{ label: string; year: number; month: number }> = [];
 
     for (let i = count - 1; i >= 0; i--) {
-      let idx = (currentMonthIdx - i) % 12;
-      if (idx < 0) idx += 12;
-      labels.push(monthNames[idx]);
+      const d = new Date(currentYear, currentMonth - i, 1);
+      months.push({
+        label: monthNames[d.getMonth()],
+        year: d.getFullYear(),
+        month: d.getMonth() + 1, // 1..12
+      });
     }
-    return labels;
+    return months;
   });
 
-  // Dynamic Chart Points (Flat at baseline 36 when 0 transactions, rising progressively when incomes exist)
+  readonly chartMonthLabels = computed<string[]>(() => {
+    return this.chartMonths().map((m) => m.label);
+  });
+
+  // Dynamic Chart Points (Real proportional values from PostgreSQL transactions)
   readonly chartPoints = computed<ChartPoint[]>(() => {
-    const labels = this.chartMonthLabels();
-    const count = labels.length;
-    const hasData = this.hasIncomes();
-    const txCount = this.incomeTransactions().length;
+    const months = this.chartMonths();
+    const count = months.length;
+    const incomes = this.allRawIncomes();
 
-    // Si NO hay ingresos registrados: línea completamente PLANA en la base (y = 36)
-    if (!hasData) {
-      return labels.map((label, idx) => ({
-        x: Math.round((idx / (count - 1)) * 100),
-        y: 36,
-        label,
-      }));
-    }
+    // 1. Calcular sumatoria real de ingresos por cada mes
+    const monthlyTotals = months.map((m) => {
+      let sum = 0;
+      for (const item of incomes) {
+        if (item.rawDate && item.status !== 'Cancelado') {
+          const parts = item.rawDate.split('-');
+          if (parts.length >= 2) {
+            const itemYear = parseInt(parts[0], 10);
+            const itemMonth = parseInt(parts[1], 10);
+            if (itemYear === m.year && itemMonth === m.month) {
+              sum += item.amount;
+            }
+          }
+        }
+      }
+      return sum;
+    });
 
-    // Si HAY ingresos registrados: sube progresivamente mes a mes
-    // Calculamos el nivel de altura según transacciones (mínimo y=35 base, pico superior y=5 a 10)
-    const curveProfiles: Record<'6m' | '1y', number[]> = {
-      '6m': [35, 32, 26, 20, 12, 4],
-      '1y': [36, 34, 32, 30, 26, 24, 20, 18, 14, 11, 7, 4],
-    };
+    // 2. Establecer escala de referencia dinámica
+    // Meta / techo de referencia base: Q10,000. Si se supera, se ajusta al máximo real + margen
+    const maxRegistered = Math.max(...monthlyTotals, 0);
+    const targetCeiling = Math.max(10000, maxRegistered > 0 ? maxRegistered * 1.15 : 10000);
 
-    const targetProfile = curveProfiles[this.selectedPeriod()] || curveProfiles['6m'];
-
-    // Escalar la progresión si hay pocas transacciones (1 o 2) para que se vea el despegue gradual
-    return labels.map((label, idx) => {
+    // 3. Mapear coordenadas SVG (viewBox 0 0 100 40)
+    // Base (0%): y = 36 | Tope (100% de targetCeiling): y = 8 | Rango = 28 unidades
+    return months.map((m, idx) => {
       const x = Math.round((idx / (count - 1)) * 100);
-      const standardY = targetProfile[idx] !== undefined ? targetProfile[idx] : 36;
-      
-      // Progresión suave: parte de la base y va subiendo hacia el mes actual
-      let y = standardY;
-      if (txCount === 1) {
-        // Con 1 ingreso, despega suavemente hacia el final
-        y = idx <= 2 ? 36 : Math.max(14, 36 - (idx - 2) * 7);
-      } else if (txCount === 2) {
-        y = idx <= 1 ? 35 : Math.max(10, 35 - (idx - 1) * 5);
+      const amount = monthlyTotals[idx];
+      const ratio = targetCeiling > 0 ? amount / targetCeiling : 0;
+      const percentage = Math.round(ratio * 100);
+
+      let y: number;
+      if (amount === 0) {
+        y = 36;
+      } else {
+        // Altura proporcional calculada con precisión
+        const calculatedY = 36 - Math.min(30, ratio * 28);
+        y = Math.max(6, Math.round(calculatedY * 10) / 10);
       }
 
-      return { x, y, label };
+      return {
+        x,
+        y,
+        label: m.label,
+        amount,
+        amountFormatted: `Q${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        percentage,
+      };
     });
   });
 
@@ -167,6 +195,12 @@ export class IngresosComponent implements OnInit, OnDestroy {
       })
     );
 
+    this.subscription.add(
+      this.dashboardService.refreshData$.subscribe(() => {
+        this.loadIncomeData();
+      })
+    );
+
     this.loadIncomeData();
     this.loadCategories();
   }
@@ -177,21 +211,30 @@ export class IngresosComponent implements OnInit, OnDestroy {
 
   loadIncomeData(): void {
     this.isLoading.set(true);
+
     this.dashboardService.getSummary().subscribe({
       next: (summary: DashboardSummary) => {
         this.totalIngresos.set(summary.totalIngresos);
         this.ingresosTrend.set(summary.ingresosTrend || '+12.5%');
-        
-        // Filter only income transactions for this view
+
         const history = summary.monthlyHistory || [];
         const incomesOnly = history.filter((item) => item.isPositive);
         this.incomeTransactions.set(incomesOnly);
+      },
+      error: (err) => {
+        console.error('Error al cargar resumen de ingresos:', err);
+      },
+    });
+
+    // Cargar todas las transacciones de ingreso para la gráfica cronológica
+    this.dashboardService.getTransactions({ type: 'income' }).subscribe({
+      next: (allIncomes: TransactionItem[]) => {
+        this.allRawIncomes.set(allIncomes || []);
         this.isLoading.set(false);
       },
       error: (err) => {
-        console.error('Error al cargar datos de ingresos desde PostgreSQL:', err);
+        console.error('Error al cargar lista de ingresos:', err);
         this.isLoading.set(false);
-        this.showToast('Error al conectar con la base de datos PostgreSQL.');
       },
     });
   }

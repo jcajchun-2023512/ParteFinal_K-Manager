@@ -33,7 +33,7 @@
           onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block'">
         <span style="display:none; color:#0f172a; font-weight:800; font-size:12px;">K-Manager</span>
       </div>
-      <span style="font-weight:700; font-size:14px; color:#ffffff;">K-Manager</span>
+      <span class="k-mobile-brand-name">K-Manager</span>
     </div>
 
     <button
@@ -49,7 +49,7 @@
   <div
     *ngIf="mobileMenuOpen()"
     (click)="closeMobileMenu()"
-    style="position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:45;">
+    class="k-mobile-backdrop">
   </div>
 
   <!-- Sidebar (Idéntico al existente con 'Ingresos' activo) -->
@@ -88,13 +88,13 @@
       </a>
 
       <!-- Egresos -->
-      <a (click)="onFeatureClick('Egresos')" class="k-nav-item">
+      <a [routerLink]="['/egresos']" class="k-nav-item">
         <span class="material-symbols-outlined">shopping_cart</span>
         <span>Egresos</span>
       </a>
 
       <!-- Historial -->
-      <a (click)="onFeatureClick('Historial')" class="k-nav-item">
+      <a [routerLink]="['/historial']" class="k-nav-item">
         <span class="material-symbols-outlined">history</span>
         <span>Historial</span>
       </a>
@@ -150,7 +150,19 @@
 
         <div class="k-user-badge">
           <div class="k-user-avatar">
-            {{ (user()?.username ?? 'U')[0].toUpperCase() }}
+            <img
+              *ngIf="user()?.avatarUrl"
+              [src]="user()!.avatarUrl"
+              [alt]="user()?.username"
+              class="k-user-avatar-img"
+              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'"
+            >
+            <span
+              [style.display]="user()?.avatarUrl ? 'none' : 'flex'"
+              style="width:100%; height:100%; align-items:center; justify-content:center;"
+            >
+              {{ (user()?.username ?? 'U')[0].toUpperCase() }}
+            </span>
           </div>
           <div>
             <p style="font-size:11px; color:#94a3b8; margin:0;">Usuario activo</p>
