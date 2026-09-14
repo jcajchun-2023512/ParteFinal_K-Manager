@@ -33,7 +33,7 @@
           onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block'">
         <span style="display:none; color:#0f172a; font-weight:800; font-size:12px;">K-Manager</span>
       </div>
-      <span style="font-weight:700; font-size:14px; color:#ffffff;">K-Manager</span>
+      <span class="k-mobile-brand-name">K-Manager</span>
     </div>
 
     <button
@@ -49,7 +49,7 @@
   <div
     *ngIf="mobileMenuOpen()"
     (click)="closeMobileMenu()"
-    style="position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:45;">
+    class="k-mobile-backdrop">
   </div>
 
   <!-- Sidebar -->
@@ -83,18 +83,18 @@
 
       <!-- Ingresos -->
       <a [routerLink]="['/ingresos']" class="k-nav-item">
-        <span class="material-symbols-outlined">payments</span>
+        <span class="material-symbols-outlined">account_balance_wallet</span>
         <span>Ingresos</span>
       </a>
 
       <!-- Egresos -->
-      <a (click)="onFeatureClick('Egresos')" class="k-nav-item">
+      <a [routerLink]="['/egresos']" class="k-nav-item">
         <span class="material-symbols-outlined">shopping_cart</span>
         <span>Egresos</span>
       </a>
 
       <!-- Historial -->
-      <a (click)="onFeatureClick('Historial')" class="k-nav-item">
+      <a [routerLink]="['/historial']" class="k-nav-item">
         <span class="material-symbols-outlined">history</span>
         <span>Historial</span>
       </a>
@@ -132,7 +132,19 @@
 
       <div class="k-user-badge">
         <div class="k-user-avatar">
-          {{ (user()?.username ?? 'U')[0].toUpperCase() }}
+          <img
+            *ngIf="user()?.avatarUrl"
+            [src]="user()!.avatarUrl"
+            [alt]="user()?.username"
+            class="k-user-avatar-img"
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'"
+          >
+          <span
+            [style.display]="user()?.avatarUrl ? 'none' : 'flex'"
+            style="width:100%; height:100%; align-items:center; justify-content:center;"
+          >
+            {{ (user()?.username ?? 'U')[0].toUpperCase() }}
+          </span>
         </div>
         <div>
           <p style="font-size:11px; color:#94a3b8; margin:0;">Usuario activo</p>
@@ -406,6 +418,16 @@
               style="width:100%; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:0.6rem; padding:0.65rem 0.85rem; color:#ffffff; font-size:13px; outline:none; color-scheme:dark;" />
           </div>
 
+          <div *ngIf="opType() === 'expense' && currentBalance() <= 0" style="background:rgba(244,63,94,0.15); border:1px solid rgba(244,63,94,0.4); padding:0.75rem; border-radius:0.6rem; font-size:12px; color:#fb7185; display:flex; align-items:center; gap:0.5rem;">
+            <span class="material-symbols-outlined" style="font-size:18px;">warning</span>
+            <span><strong>Sin fondos:</strong> No tienes dinero disponible en tu cuenta (Saldo: {{ saldo() }}). No es posible realizar ningún egreso hasta registrar un ingreso.</span>
+          </div>
+
+          <div *ngIf="opType() === 'expense' && currentBalance() > 0 && opAmount() && opAmount()! > currentBalance()" style="background:rgba(234,179,8,0.15); border:1px solid rgba(234,179,8,0.4); padding:0.75rem; border-radius:0.6rem; font-size:12px; color:#facc15; display:flex; align-items:center; gap:0.5rem;">
+            <span class="material-symbols-outlined" style="font-size:18px;">error</span>
+            <span><strong>Saldo insuficiente:</strong> El monto ingresado (Q{{ opAmount() }}) supera tu saldo disponible ({{ saldo() }}).</span>
+          </div>
+
           <div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25); padding:0.75rem; border-radius:0.6rem; font-size:12px; color:#10b981; display:flex; align-items:center; gap:0.5rem;">
             <span class="material-symbols-outlined" style="font-size:18px;">database</span>
             <span>Esta operación se vinculará con category_id en PostgreSQL.</span>
@@ -421,8 +443,10 @@
           </button>
           <button
             type="submit"
-            [disabled]="isSubmitting()"
-            style="padding:0.5rem 1.25rem; border:none; border-radius:0.6rem; background:linear-gradient(135deg,#006c49,#10b981); color:#ffffff; font-weight:700; font-size:13px; cursor:pointer;">
+            [disabled]="isSubmitting() || (opType() === 'expense' && currentBalance() <= 0)"
+            [style.opacity]="(opType() === 'expense' && currentBalance() <= 0) ? '0.5' : '1'"
+            [style.cursor]="(opType() === 'expense' && currentBalance() <= 0) ? 'not-allowed' : 'pointer'"
+            style="padding:0.5rem 1.25rem; border:none; border-radius:0.6rem; background:linear-gradient(135deg,#006c49,#10b981); color:#ffffff; font-weight:700; font-size:13px;">
             {{ isSubmitting() ? 'Guardando...' : 'Guardar Operación' }}
           </button>
         </div>

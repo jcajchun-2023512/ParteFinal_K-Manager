@@ -26,6 +26,7 @@ export interface MonthlyHistoryItem {
   title: string;
   subtitle: string;
   date: string;
+  rawDate?: string;
   status: string;
   statusClass: string;
   amount: string;
@@ -34,9 +35,29 @@ export interface MonthlyHistoryItem {
   iconBg: string;
   categoryId?: number;
 }
+
+export interface TransactionItem {
+  id: number;
+  userId: number;
+  categoryId?: number;
+  title: string;
+  subtitle?: string;
+  amount: number;
+  type: 'income' | 'expense';
+  status: 'Completado' | 'Pendiente' | 'Cancelado';
+  transactionDate: string;
+  date?: string;
+  rawDate?: string;
+  createdAt?: string;
+  categoryName?: string;
+  categoryIcon?: string;
+  categoryColor?: string;
+}
 export interface DashboardSummary {
   totalIngresos: string;
   totalEgresos: string;
+  saldo?: string;
+  balance?: number;
   ingresosTrend: string;
   porcentajeAhorro: number;
   ahorradoMes: string;
