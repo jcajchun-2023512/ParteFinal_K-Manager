@@ -22,6 +22,22 @@ export const routes: Routes = [
       import('./ingresos/ingresos.component').then((m) => m.IngresosComponent),
   },
 
+  // Pestaña de Egresos
+  {
+    path: 'egresos',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./egresos/egresos.component').then((m) => m.EgresosComponent),
+  },
+
+  // Pestaña de Historial
+  {
+    path: 'historial',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./historial/historial.component').then((m) => m.HistorialComponent),
+  },
+
   // Ejemplo de ruta protegida solo para Admin
   {
     path: 'admin',

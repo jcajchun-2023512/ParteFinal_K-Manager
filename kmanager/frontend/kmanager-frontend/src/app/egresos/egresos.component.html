@@ -1,0 +1,731 @@
+<div class="k-dashboard-layout">
+
+  <!-- Capa de Fondo Ambiental y Efectos Visuales -->
+  <div class="k-bg-grid"></div>
+  <div class="k-bg-beam"></div>
+  <div class="k-orb k-orb-rose-1"></div>
+  <div class="k-orb k-orb-rose-2"></div>
+
+  <!-- Lava Lamp Floating Bubbles Animadas -->
+  <div class="k-lava-container">
+    <div class="k-lava-bubble k-bubble-1"></div>
+    <div class="k-lava-bubble k-bubble-2"></div>
+    <div class="k-lava-bubble k-bubble-3"></div>
+    <div class="k-lava-bubble k-bubble-4"></div>
+    <div class="k-lava-bubble k-bubble-5"></div>
+  </div>
+
+  <!-- Mobile Header -->
+  <header class="k-mobile-header">
+    <div class="k-mobile-brand">
+      <div class="k-logo-badge">
+        <img
+          alt="K-Manager Logo"
+          class="k-logo-img"
+          src="/assets/logo-kmanager.png"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block'">
+        <span style="display:none; color:#0f172a; font-weight:800; font-size:12px;">K-Manager</span>
+      </div>
+      <span class="k-mobile-brand-name">K-Manager</span>
+    </div>
+
+    <button
+      type="button"
+      (click)="toggleMobileMenu()"
+      class="k-mobile-menu-btn"
+      aria-label="Abrir menú">
+      <span class="material-symbols-outlined">{{ mobileMenuOpen() ? 'close' : 'menu' }}</span>
+    </button>
+  </header>
+
+  <!-- Mobile Overlay Backdrop -->
+  <div
+    *ngIf="mobileMenuOpen()"
+    (click)="closeMobileMenu()"
+    class="k-mobile-backdrop">
+  </div>
+
+  <!-- Sidebar Lateral Fijo -->
+  <nav class="k-sidebar" [class.k-sidebar-open]="mobileMenuOpen()">
+    <!-- Brand Logo -->
+    <div class="k-sidebar-header">
+      <img
+        src="/assets/logo-kmanager.png"
+        alt="K-Manager — Control de Gastos"
+        class="k-sidebar-logo-full"
+        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'"
+      >
+      <div class="k-sidebar-logo-fallback-text" style="display:none;">
+        <div class="k-sidebar-logo-icon">K</div>
+        <div>
+          <span class="k-sidebar-brand-name">K-Manager</span>
+          <span class="k-sidebar-brand-tagline">Control de Gastos</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="k-sidebar-nav">
+      <a [routerLink]="['/dashboard']" class="k-nav-item">
+        <span class="material-symbols-outlined">dashboard</span>
+        <span>Dashboard</span>
+      </a>
+
+      <a [routerLink]="['/ingresos']" class="k-nav-item">
+        <span class="material-symbols-outlined">account_balance_wallet</span>
+        <span>Ingresos</span>
+      </a>
+
+      <!-- Egresos (Activo) -->
+      <a [routerLink]="['/egresos']" class="k-nav-item k-nav-active">
+        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">shopping_cart</span>
+        <span>Egresos</span>
+      </a>
+
+      <a [routerLink]="['/historial']" class="k-nav-item">
+        <span class="material-symbols-outlined">history</span>
+        <span>Historial</span>
+      </a>
+    </div>
+
+    <!-- CTA & Logout -->
+    <div class="k-sidebar-footer">
+      <button
+        type="button"
+        (click)="openNewOperationModal()"
+        class="k-btn-new-op">
+        <span class="material-symbols-outlined" style="font-size:18px;">add</span>
+        Nuevo Egreso
+      </button>
+
+      <button
+        type="button"
+        (click)="onLogout()"
+        class="k-btn-logout">
+        <span class="material-symbols-outlined" style="font-size:18px;">logout</span>
+        Cerrar Sesión
+      </button>
+    </div>
+  </nav>
+
+  <!-- Espacio de Trabajo Principal -->
+  <main class="k-workspace">
+
+    <!-- Topbar & Header Section -->
+    <header class="k-workspace-header">
+      <div>
+        <h1 class="k-header-title">Resumen de Egresos</h1>
+        <p class="k-header-subtitle">Análisis detallado de salidas de capital en tiempo real.</p>
+      </div>
+
+      <!-- Quick Actions / Filters -->
+      <div class="k-header-actions">
+        <!-- Selector de Mes -->
+        <div class="k-select-wrap">
+          <span class="material-symbols-outlined k-select-icon">calendar_month</span>
+          <select
+            [value]="selectedMonth()"
+            (change)="onMonthChange($event)"
+            class="k-month-select">
+            <option *ngFor="let m of monthsList" [value]="m.value" [selected]="m.value === selectedMonth()">
+              {{ m.name }} {{ selectedYear() }}
+            </option>
+          </select>
+          <span class="material-symbols-outlined k-select-chevron">expand_more</span>
+        </div>
+
+        <!-- Botón Exportar CSV -->
+        <button
+          type="button"
+          (click)="exportCSV()"
+          class="k-btn-secondary-action"
+          title="Descargar reporte en CSV">
+          <span class="material-symbols-outlined">download</span>
+          <span>Exportar CSV</span>
+        </button>
+
+        <!-- Botón Nuevo Egreso -->
+        <button
+          type="button"
+          (click)="openNewOperationModal()"
+          class="k-btn-top-action">
+          <span class="material-symbols-outlined">add_circle</span>
+          <span>Nuevo Egreso</span>
+        </button>
+
+        <!-- Badge Usuario Activo -->
+        <div class="k-user-badge">
+          <div class="k-user-avatar">
+            <img
+              *ngIf="user()?.avatarUrl"
+              [src]="user()!.avatarUrl"
+              [alt]="user()?.username"
+              class="k-user-avatar-img"
+              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'"
+            >
+            <span
+              [style.display]="user()?.avatarUrl ? 'none' : 'flex'"
+              style="width:100%; height:100%; align-items:center; justify-content:center;"
+            >
+              {{ (user()?.username ?? 'U')[0].toUpperCase() }}
+            </span>
+          </div>
+          <div class="k-user-info">
+            <span class="k-user-status">En línea</span>
+            <span class="k-user-name">{{ user()?.username ?? 'Usuario' }}</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Alerta de Saldo Cero / Sin Dinero -->
+    <div *ngIf="currentBalance() <= 0 && !isLoading()" style="margin-bottom: 1.5rem; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); border-radius: 1rem; padding: 1rem 1.25rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; backdrop-filter: blur(12px);">
+      <div style="display: flex; align-items: center; gap: 0.85rem;">
+        <div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(244, 63, 94, 0.2); display: flex; align-items: center; justify-content: center; color: #fb7185; flex-shrink: 0;">
+          <span class="material-symbols-outlined" style="font-size: 22px;">savings</span>
+        </div>
+        <div>
+          <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #ffffff;">No tienes dinero dentro de tu cuenta (Saldo: {{ saldoFormatted() }})</h4>
+          <p style="margin: 0.25rem 0 0 0; font-size: 0.825rem; color: #cbd5e1;">Para poder realizar o registrar nuevos egresos, primero debes tener dinero registrado como ingreso en tu cuenta.</p>
+        </div>
+      </div>
+      <a [routerLink]="['/ingresos']" style="padding: 0.5rem 1rem; border-radius: 0.6rem; background: #10b981; color: #ffffff; font-size: 0.825rem; font-weight: 700; text-decoration: none; white-space: nowrap; display: flex; align-items: center; gap: 0.4rem;">
+        <span class="material-symbols-outlined" style="font-size: 16px;">add</span>
+        <span>Registrar Ingreso</span>
+      </a>
+    </div>
+
+    <!-- Bento Grid Superior: Card Hero + Gráfica de Barras -->
+    <div class="k-grid">
+
+      <!-- Total Egresos Card Hero (Stitch Design) -->
+      <section class="k-col-4 k-hero-expense-card">
+        <div class="k-hero-watermark">
+          <span class="material-symbols-outlined">account_balance</span>
+        </div>
+
+        <div class="k-hero-content">
+          <div class="k-hero-label-row">
+            <span class="k-hero-label">Total Egresos (GTQ)</span>
+            <div class="k-hero-icon-badge">
+              <span class="material-symbols-outlined">payments</span>
+            </div>
+          </div>
+
+          <h2 class="k-hero-amount">{{ totalEgresosFormatted() }}</h2>
+
+          <div class="k-trend-container">
+            <span class="k-trend-pill" [class.k-trend-pill--up]="trendVsPreviousMonth().isUp">
+              <span class="material-symbols-outlined">
+                {{ trendVsPreviousMonth().isUp ? 'trending_up' : 'trending_down' }}
+              </span>
+              {{ trendVsPreviousMonth().percentage }}
+            </span>
+            <span class="k-trend-text">vs. mes anterior</span>
+          </div>
+        </div>
+
+        <div class="k-hero-footer-bar">
+          <span class="k-hero-month-tag">{{ monthsList[selectedMonth() - 1].name }} {{ selectedYear() }}</span>
+          <span class="k-hero-count-tag">{{ filteredExpenses().length }} registros</span>
+        </div>
+      </section>
+
+      <!-- Gráfica de Barras: Flujo de Salidas Semanal (Stitch Design) -->
+      <section class="k-col-8 k-glass-panel k-chart-card">
+        <div class="k-chart-card-header">
+          <div>
+            <h3 class="k-section-title">Flujo de Salidas</h3>
+            <p class="k-section-subtitle">Distribución acumulada por día de la semana para este mes.</p>
+          </div>
+          <div class="k-chart-legend">
+            <span class="k-legend-dot k-legend-dot--peak"></span>
+            <span class="k-legend-text">Día de Mayor Salida</span>
+          </div>
+        </div>
+
+        <!-- Barras de Gráfica Dinámicas -->
+        <div class="k-barchart-container">
+          <div *ngFor="let bar of chartBars()" class="k-bar-column">
+            <!-- Tooltip al hacer hover -->
+            <div class="k-bar-tooltip">
+              {{ bar.amountFormatted }}
+            </div>
+
+            <div class="k-bar-track">
+              <div
+                class="k-bar-fill"
+                [class.k-bar-fill--peak]="bar.isPeak"
+                [style.height.%]="bar.heightPercentage">
+              </div>
+            </div>
+
+            <span class="k-bar-label">{{ bar.label }}</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Grid de Categorías Principales (Stitch Design) -->
+      <section class="k-col-12">
+        <div class="k-section-header-row">
+          <h3 class="k-section-title">Categorías Principales</h3>
+          <span class="k-section-counter">{{ categoryBreakdown().length }} categorías con movimiento</span>
+        </div>
+
+        <div class="k-categories-grid">
+          <div *ngFor="let cat of categoryBreakdown()" class="k-category-card">
+            <div class="k-category-card-top">
+              <div class="k-cat-icon-badge">
+                <span class="material-symbols-outlined">{{ cat.icon }}</span>
+              </div>
+              <span class="k-cat-percentage">{{ cat.percentage }}%</span>
+            </div>
+
+            <div class="k-category-card-body">
+              <h4 class="k-cat-name">{{ cat.name }}</h4>
+              <p class="k-cat-amount">{{ cat.amountFormatted }}</p>
+
+              <!-- Barra de Progreso -->
+              <div class="k-progress-track">
+                <div
+                  class="k-progress-fill"
+                  [style.width.%]="cat.percentage">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Estado Vacío Si No Hay Egresos Registrados -->
+          <div *ngIf="categoryBreakdown().length === 0" class="k-empty-categories">
+            <span class="material-symbols-outlined">receipt_long</span>
+            <p>No hay egresos registrados en este período. Registra un nuevo egreso para visualizar el desglose.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tabla de Transacciones Recientes (Stitch Design) -->
+      <section class="k-col-12 k-glass-panel k-table-panel">
+        <div class="k-table-header-bar">
+          <div>
+            <h3 class="k-section-title">Transacciones de Egresos</h3>
+            <p class="k-section-subtitle">Registros verificados y sincronizados con PostgreSQL.</p>
+          </div>
+
+          <div class="k-table-header-meta">
+            <span class="k-badge-count">{{ filteredExpenses().length }} registros</span>
+            <a [routerLink]="['/historial']" class="k-btn-link-action">
+              <span>Ver todo el historial</span>
+              <span class="material-symbols-outlined">arrow_forward</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="k-table-container">
+          <table class="k-table">
+            <thead>
+              <tr>
+                <th>Referencia / Descripción</th>
+                <th>Categoría</th>
+                <th>Fecha</th>
+                <th>Estado</th>
+                <th style="text-align:right;">Monto (GTQ)</th>
+                <th style="text-align:center; width:110px;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of filteredExpenses()" class="k-table-row">
+                <!-- Referencia -->
+                <td>
+                  <div class="k-ref-cell">
+                    <div class="k-ref-icon-box">
+                      <span class="material-symbols-outlined">{{ item.categoryIcon || 'shopping_cart' }}</span>
+                    </div>
+                    <div>
+                      <p class="k-ref-title">{{ item.title }}</p>
+                      <p class="k-ref-code">TXN-{{ item.id }}-EXP</p>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Categoría -->
+                <td class="k-cat-cell">
+                  <span class="k-cat-badge">
+                    {{ item.categoryName || item.subtitle || 'Gasto General' }}
+                  </span>
+                </td>
+
+                <!-- Fecha -->
+                <td class="k-date-cell">{{ item.date || item.transactionDate }}</td>
+
+                <!-- Estado -->
+                <td>
+                  <span
+                    class="k-status-badge"
+                    [class.k-status-badge--completed]="(item.status || 'Completado').toLowerCase() === 'completado'"
+                    [class.k-status-badge--pending]="(item.status || '').toLowerCase() === 'pendiente'">
+                    <span class="k-status-dot"></span>
+                    {{ item.status || 'Completado' }}
+                  </span>
+                </td>
+
+                <!-- Monto Negativo en Rojo Carmesí -->
+                <td style="text-align:right;">
+                  <span class="k-amount-expense">
+                    - Q {{ item.amount | number:'1.2-2' }}
+                  </span>
+                </td>
+
+                <!-- Acciones CRUD -->
+                <td style="text-align:center;">
+                  <div class="k-table-actions">
+                    <button
+                      type="button"
+                      (click)="openEditModal(item)"
+                      class="k-btn-action k-btn-action--edit"
+                      title="Editar egreso">
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      (click)="openDeleteConfirm(item)"
+                      class="k-btn-action k-btn-action--delete"
+                      title="Eliminar egreso">
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Fila sin datos -->
+              <tr *ngIf="filteredExpenses().length === 0">
+                <td colspan="6" class="k-table-empty">
+                  <div class="k-empty-state">
+                    <div class="k-empty-icon-box">
+                      <span class="material-symbols-outlined">payments</span>
+                    </div>
+                    <h4>No hay egresos en este mes</h4>
+                    <p>No se encontraron egresos registrados para {{ monthsList[selectedMonth() - 1].name }} {{ selectedYear() }}.</p>
+                    <button
+                      type="button"
+                      (click)="openNewOperationModal()"
+                      class="k-btn-top-action"
+                      style="margin-top: 1rem;">
+                      <span class="material-symbols-outlined">add</span>
+                      Registrar Primer Egreso
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Modal: Nuevo Egreso (Conectado a PostgreSQL) -->
+  <div *ngIf="showNewOperationModal()" class="k-modal-backdrop">
+    <div class="k-modal-box">
+      <div class="k-modal-header">
+        <div class="k-modal-title-group" style="color: #f43f5e;">
+          <span class="material-symbols-outlined">shopping_cart</span>
+          <h3>Registrar Nuevo Egreso</h3>
+        </div>
+        <button
+          type="button"
+          (click)="closeNewOperationModal()"
+          class="k-modal-close-btn">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form (ngSubmit)="saveExpense()">
+        <div class="k-form-body">
+          <!-- Descripción -->
+          <div class="k-form-field">
+            <label class="k-form-label">Descripción del Egreso *</label>
+            <input
+              type="text"
+              name="opTitle"
+              [ngModel]="opTitle()"
+              (ngModelChange)="opTitle.set($event)"
+              placeholder="Ej: Renta oficina, Licencias de software, Nómina..."
+              required
+              class="k-form-input" />
+          </div>
+
+          <!-- Categoría en PostgreSQL -->
+          <div class="k-form-field">
+            <label class="k-form-label">Categoría en PostgreSQL</label>
+            <select
+              name="opCategoryId"
+              [ngModel]="opCategoryId()"
+              (change)="onCategorySelectChange($event)"
+              class="k-form-select">
+              <option [value]="null">-- Seleccionar Categoría --</option>
+              <option *ngFor="let cat of categories()" [value]="cat.id">
+                {{ cat.name }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Subtítulo / Detalle -->
+          <div class="k-form-field">
+            <label class="k-form-label">Subtítulo / Detalle (Opcional)</label>
+            <input
+              type="text"
+              name="opSubtitle"
+              [ngModel]="opSubtitle()"
+              (ngModelChange)="opSubtitle.set($event)"
+              placeholder="Ej: Sede Central Z10, Pago Quincenal..."
+              class="k-form-input" />
+          </div>
+
+          <!-- Monto (GTQ) -->
+          <div class="k-form-field">
+            <label class="k-form-label">Monto en Quetzales (GTQ) *</label>
+            <input
+              type="number"
+              step="0.01"
+              name="opAmount"
+              [ngModel]="opAmount()"
+              (ngModelChange)="opAmount.set($event)"
+              placeholder="0.00"
+              required
+              class="k-form-input" />
+          </div>
+
+          <!-- Fecha -->
+          <div class="k-form-field">
+            <label class="k-form-label">Fecha de la Transacción</label>
+            <input
+              type="date"
+              name="opDate"
+              [ngModel]="opDate()"
+              (ngModelChange)="opDate.set($event)"
+              class="k-form-input" />
+          </div>
+
+          <div *ngIf="currentBalance() <= 0" style="background:rgba(244,63,94,0.15); border:1px solid rgba(244,63,94,0.4); padding:0.85rem; border-radius:0.75rem; font-size:12.5px; color:#fb7185; display:flex; align-items:flex-start; gap:0.6rem; line-height:1.4;">
+            <span class="material-symbols-outlined" style="font-size:20px; flex-shrink:0;">warning</span>
+            <div>
+              <strong style="color:#ffffff;">Sin fondos disponibles:</strong> No tienes dinero dentro de tu cuenta (Saldo actual: {{ saldoFormatted() }}). No puedes realizar ningún egreso hasta registrar un ingreso en el sistema.
+            </div>
+          </div>
+
+          <div *ngIf="currentBalance() > 0 && opAmount() && opAmount()! > currentBalance()" style="background:rgba(234,179,8,0.15); border:1px solid rgba(234,179,8,0.4); padding:0.85rem; border-radius:0.75rem; font-size:12.5px; color:#facc15; display:flex; align-items:flex-start; gap:0.6rem; line-height:1.4;">
+            <span class="material-symbols-outlined" style="font-size:20px; flex-shrink:0;">error</span>
+            <div>
+              <strong style="color:#ffffff;">Saldo insuficiente:</strong> El monto solicitado (Q{{ opAmount() }}) supera tu saldo disponible ({{ saldoFormatted() }}).
+            </div>
+          </div>
+
+          <div class="k-form-info-box">
+            <span class="material-symbols-outlined">verified</span>
+            <span>Esta salida se guardará en PostgreSQL y actualizará la gráfica al instante.</span>
+          </div>
+        </div>
+
+        <div class="k-modal-footer">
+          <button
+            type="button"
+            (click)="closeNewOperationModal()"
+            class="k-btn-cancel">
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            [disabled]="isSubmitting() || currentBalance() <= 0"
+            [style.opacity]="currentBalance() <= 0 ? '0.5' : '1'"
+            [style.cursor]="currentBalance() <= 0 ? 'not-allowed' : 'pointer'"
+            class="k-btn-submit-expense">
+            {{ isSubmitting() ? 'Guardando...' : 'Guardar Egreso' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Editar Egreso (Conectado a PostgreSQL) -->
+  <div *ngIf="showEditModal()" class="k-modal-backdrop">
+    <div class="k-modal-box">
+      <div class="k-modal-header">
+        <div class="k-modal-title-group" style="color: #38bdf8;">
+          <span class="material-symbols-outlined">edit_note</span>
+          <h3>Editar Egreso</h3>
+        </div>
+        <button
+          type="button"
+          (click)="closeEditModal()"
+          class="k-modal-close-btn">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form (ngSubmit)="saveEditExpense()">
+        <div class="k-form-body">
+          <div class="k-form-field">
+            <label class="k-form-label">Descripción *</label>
+            <input
+              type="text"
+              name="editTitle"
+              [ngModel]="editTitle()"
+              (ngModelChange)="editTitle.set($event)"
+              required
+              class="k-form-input" />
+          </div>
+
+          <div class="k-form-field">
+            <label class="k-form-label">Categoría en PostgreSQL</label>
+            <select
+              name="editCategoryId"
+              [ngModel]="editCategoryId()"
+              (change)="onEditCategorySelectChange($event)"
+              class="k-form-select">
+              <option [value]="null">-- Seleccionar Categoría --</option>
+              <option *ngFor="let cat of categories()" [value]="cat.id">
+                {{ cat.name }}
+              </option>
+            </select>
+          </div>
+
+          <div class="k-form-field">
+            <label class="k-form-label">Subtítulo / Detalle (Opcional)</label>
+            <input
+              type="text"
+              name="editSubtitle"
+              [ngModel]="editSubtitle()"
+              (ngModelChange)="editSubtitle.set($event)"
+              class="k-form-input" />
+          </div>
+
+          <div class="k-form-field">
+            <label class="k-form-label">Monto (GTQ) *</label>
+            <input
+              type="number"
+              step="0.01"
+              name="editAmount"
+              [ngModel]="editAmount()"
+              (ngModelChange)="editAmount.set($event)"
+              required
+              class="k-form-input" />
+          </div>
+
+          <div class="k-form-field">
+            <label class="k-form-label">Estado</label>
+            <select
+              name="editStatus"
+              [ngModel]="editStatus()"
+              (ngModelChange)="editStatus.set($event)"
+              class="k-form-select">
+              <option value="Completado">Completado</option>
+              <option value="Pendiente">Pendiente</option>
+              <option value="Cancelado">Cancelado</option>
+            </select>
+          </div>
+
+          <div class="k-form-field">
+            <label class="k-form-label">Fecha</label>
+            <input
+              type="date"
+              name="editDate"
+              [ngModel]="editDate()"
+              (ngModelChange)="editDate.set($event)"
+              class="k-form-input" />
+          </div>
+        </div>
+
+        <div class="k-modal-footer">
+          <button
+            type="button"
+            (click)="closeEditModal()"
+            class="k-btn-cancel">
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            [disabled]="isEditSubmitting()"
+            class="k-btn-submit-edit">
+            {{ isEditSubmitting() ? 'Guardando cambios...' : 'Guardar Cambios' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Confirmación de Eliminación -->
+  <div *ngIf="showDeleteConfirmModal()" class="k-modal-backdrop">
+    <div class="k-modal-box k-modal-box--delete">
+      <div class="k-delete-warning-icon">
+        <span class="material-symbols-outlined">delete_forever</span>
+      </div>
+      <h3 class="k-delete-title">¿Eliminar este egreso?</h3>
+      <p class="k-delete-desc">
+        ¿Está seguro de que deseas eliminar permanentemente <strong>"{{ deletingItem()?.title }}"</strong> por valor de <strong style="color:#f43f5e;">Q {{ deletingItem()?.amount | number:'1.2-2' }}</strong>?<br>Esta acción eliminará el registro de PostgreSQL de forma irreversible.
+      </p>
+
+      <div class="k-delete-actions">
+        <button
+          type="button"
+          (click)="closeDeleteConfirm()"
+          [disabled]="isDeleting()"
+          class="k-btn-cancel">
+          Cancelar
+        </button>
+        <button
+          type="button"
+          (click)="confirmDelete()"
+          [disabled]="isDeleting()"
+          class="k-btn-confirm-delete">
+          {{ isDeleting() ? 'Eliminando...' : 'Sí, Eliminar' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Alert -->
+  <div *ngIf="toastMessage()"
+    class="k-toast"
+    [class.k-toast--success]="toastType() === 'success'"
+    [class.k-toast--error]="toastType() === 'error'"
+    [class.k-toast--info]="toastType() === 'info'">
+
+    <div class="k-toast-icon">
+      <span class="material-symbols-outlined">
+        {{ toastType() === 'success' ? 'check_circle' : toastType() === 'error' ? 'error' : 'info' }}
+      </span>
+    </div>
+
+    <div class="k-toast-body">
+      <p class="k-toast-title">
+        {{ toastType() === 'success' ? '¡Operación exitosa!' : toastType() === 'error' ? 'Ocurrió un error' : 'Aviso' }}
+      </p>
+      <p class="k-toast-message">{{ toastMessage() }}</p>
+    </div>
+
+    <button type="button" class="k-toast-close" (click)="toastMessage.set(null)" aria-label="Cerrar">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+
+    <div class="k-toast-progress"></div>
+  </div>
+
+  <!-- Session Expired Modal Overlay -->
+  <div *ngIf="sessionExpired()" class="k-modal-backdrop">
+    <div class="k-modal-box" style="text-align:center; max-width:380px;">
+      <div style="width:54px; height:54px; border-radius:50%; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#f87171; display:flex; align-items:center; justify-content:center; margin:0 auto 1rem auto;">
+        <span class="material-symbols-outlined" style="font-size:28px;">warning</span>
+      </div>
+      <h3 style="font-size:1.25rem; font-weight:800; color:#ffffff; margin:0 0 0.5rem 0;">Sesión Expirada</h3>
+      <p style="font-size:13px; color:#94a3b8; margin:0 0 1.5rem 0;">Su token de sesión ha expirado. Inicia sesión nuevamente para continuar.</p>
+      <button
+        type="button"
+        (click)="onLogout()"
+        class="k-btn-new-op">
+        Iniciar Sesión
+      </button>
+    </div>
+  </div>
+
+</div>
