@@ -8,8 +8,10 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  passwordHash: string;
+  passwordHash?: string;
   role: Role;
+  googleId?: string;
+  avatarUrl?: string;
 }
 
 /** Versión segura del usuario, sin el hash, lista para exponer al cliente. */

@@ -11,16 +11,20 @@ export const env = {
 
   jwt: {
     secret: process.env.JWT_SECRET || 'dev-secret-change-me',
-    expiresIn: process.env.JWT_EXPIRES_IN || '15',
+    expiresIn: process.env.JWT_EXPIRES_IN || '15m',
     refreshSecret: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-me',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+  },
+
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
   },
 
   cors: {
     origin: process.env.CORS_ORIGIN || 'http://localhost:4200',
   },
 
-  // Reservado para el siguiente sprint (PostgreSQL). No se usa todavía.
   db: {
     host: process.env.DB_HOST || 'localhost',
     port: Number(process.env.DB_PORT) || 5432,

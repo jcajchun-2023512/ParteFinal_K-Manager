@@ -36,6 +36,7 @@ export interface Transaction {
   type: 'income' | 'expense';
   status: 'Completado' | 'Pendiente' | 'Cancelado';
   transactionDate: string;
+  rawDate?: string;
   createdAt?: Date;
   categoryName?: string;
   categoryIcon?: string;
@@ -45,6 +46,8 @@ export interface Transaction {
 export interface DashboardSummary {
   totalIngresos: string;
   totalEgresos: string;
+  saldo: string;
+  balance: number;
   ingresosTrend: string;
   porcentajeAhorro: number;
   ahorradoMes: string;
@@ -54,6 +57,7 @@ export interface DashboardSummary {
     title: string;
     subtitle: string;
     date: string;
+    rawDate?: string;
     status: string;
     statusClass: string;
     amount: string;

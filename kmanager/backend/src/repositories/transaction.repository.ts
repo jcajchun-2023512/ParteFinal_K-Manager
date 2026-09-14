@@ -1,9 +1,17 @@
 import { pool } from '@config/database';
 import { Transaction, CreateTransactionDto, UpdateTransactionDto, Category, QuickExpense, CreateQuickExpenseDto } from '@models/transaction.model';
 
+export interface TransactionFilterOptions {
+  type?: 'income' | 'expense';
+  month?: number;
+  year?: number;
+  limit?: number;
+}
+
 export interface ITransactionRepository {
-  findByUserId(userId: number, limit?: number): Promise<Transaction[]>;
-  getTotalsByUserId(userId: number): Promise<{ totalIncome: number; totalExpense: number }>;
+  findByUserId(userId: number, options?: number | TransactionFilterOptions): Promise<Transaction[]>;
+  findById(id: number, userId: number): Promise<Transaction | null>;
+  getTotalsByUserId(userId: number): Promise<{ totalIncome: number; totalExpense: number; balance: number }>;
   getSavingGoalByUserId(userId: number): Promise<{ targetAmount: number; currentAmount: number } | null>;
   create(userId: number, dto: CreateTransactionDto): Promise<Transaction>;
   update(id: number, userId: number, dto: UpdateTransactionDto): Promise<Transaction | null>;
@@ -26,19 +34,55 @@ function formatDisplayDate(dateStr: string | null | undefined): string {
 }
 
 export class PostgresTransactionRepository implements ITransactionRepository {
-  async findByUserId(userId: number, limit = 20): Promise<Transaction[]> {
-    const res = await pool.query(
-      `SELECT t.id, t.user_id AS "userId", t.category_id AS "categoryId", t.title, t.subtitle,
-              t.amount, t.type, t.status, TO_CHAR(t.transaction_date, 'YYYY-MM-DD') AS "rawTransactionDate",
-              t.created_at AS "createdAt",
-              c.name AS "categoryName", c.icon AS "categoryIcon", c.color AS "categoryColor"
-       FROM transactions t
-       LEFT JOIN categories c ON c.id = t.category_id
-       WHERE t.user_id = $1
-       ORDER BY t.transaction_date DESC, t.id DESC
-       LIMIT $2`,
-      [userId, limit]
-    );
+  async findByUserId(
+    userId: number,
+    options?: number | TransactionFilterOptions
+  ): Promise<Transaction[]> {
+    let limit = 500;
+    let type: string | undefined;
+    let month: number | undefined;
+    let year: number | undefined;
+
+    if (typeof options === 'number') {
+      limit = options;
+    } else if (options) {
+      if (options.limit) limit = options.limit;
+      type = options.type;
+      month = options.month;
+      year = options.year;
+    }
+
+    const conditions: string[] = ['t.user_id = $1'];
+    const params: any[] = [userId];
+    let paramIdx = 2;
+
+    if (type) {
+      conditions.push(`t.type = $${paramIdx++}`);
+      params.push(type);
+    }
+    if (month && month >= 1 && month <= 12) {
+      conditions.push(`EXTRACT(MONTH FROM t.transaction_date) = $${paramIdx++}`);
+      params.push(month);
+    }
+    if (year && year > 2000) {
+      conditions.push(`EXTRACT(YEAR FROM t.transaction_date) = $${paramIdx++}`);
+      params.push(year);
+    }
+
+    params.push(limit);
+
+    const query = `
+      SELECT t.id, t.user_id AS "userId", t.category_id AS "categoryId", t.title, t.subtitle,
+             t.amount, t.type, t.status, TO_CHAR(t.transaction_date, 'YYYY-MM-DD') AS "rawTransactionDate",
+             t.created_at AS "createdAt",
+             c.name AS "categoryName", c.icon AS "categoryIcon", c.color AS "categoryColor"
+      FROM transactions t
+      LEFT JOIN categories c ON c.id = t.category_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY t.transaction_date DESC, t.id DESC
+      LIMIT $${paramIdx}`;
+
+    const res = await pool.query(query, params);
 
     return res.rows.map((r) => ({
       id: r.id,
@@ -50,6 +94,7 @@ export class PostgresTransactionRepository implements ITransactionRepository {
       type: r.type,
       status: r.status,
       transactionDate: formatDisplayDate(r.rawTransactionDate),
+      rawDate: r.rawTransactionDate,
       createdAt: r.createdAt,
       categoryName: r.categoryName,
       categoryIcon: r.categoryIcon,
@@ -57,20 +102,56 @@ export class PostgresTransactionRepository implements ITransactionRepository {
     }));
   }
 
-  async getTotalsByUserId(userId: number): Promise<{ totalIncome: number; totalExpense: number }> {
+  async findById(id: number, userId: number): Promise<Transaction | null> {
+    const query = `
+      SELECT t.id, t.user_id AS "userId", t.category_id AS "categoryId", t.title, t.subtitle,
+             t.amount, t.type, t.status, TO_CHAR(t.transaction_date, 'YYYY-MM-DD') AS "rawTransactionDate",
+             t.created_at AS "createdAt",
+             c.name AS "categoryName", c.icon AS "categoryIcon", c.color AS "categoryColor"
+      FROM transactions t
+      LEFT JOIN categories c ON c.id = t.category_id
+      WHERE t.id = $1 AND t.user_id = $2
+      LIMIT 1`;
+
+    const res = await pool.query(query, [id, userId]);
+    if (res.rows.length === 0) return null;
+    const r = res.rows[0];
+
+    return {
+      id: r.id,
+      userId: r.userId,
+      categoryId: r.categoryId,
+      title: r.title,
+      subtitle: r.subtitle || (r.type === 'income' ? 'Ingreso' : 'Gasto'),
+      amount: parseFloat(r.amount),
+      type: r.type,
+      status: r.status,
+      transactionDate: formatDisplayDate(r.rawTransactionDate),
+      rawDate: r.rawTransactionDate,
+      createdAt: r.createdAt,
+      categoryName: r.categoryName,
+      categoryIcon: r.categoryIcon,
+      categoryColor: r.categoryColor,
+    };
+  }
+
+  async getTotalsByUserId(userId: number): Promise<{ totalIncome: number; totalExpense: number; balance: number }> {
     const res = await pool.query(
       `SELECT
-         COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS "totalIncome",
-         COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS "totalExpense"
+         COALESCE(SUM(CASE WHEN type = 'income' AND status != 'Cancelado' THEN amount ELSE 0 END), 0) AS "totalIncome",
+         COALESCE(SUM(CASE WHEN type = 'expense' AND status != 'Cancelado' THEN amount ELSE 0 END), 0) AS "totalExpense"
        FROM transactions
        WHERE user_id = $1`,
       [userId]
     );
 
     const row = res.rows[0];
+    const totalIncome = parseFloat(row.totalIncome);
+    const totalExpense = parseFloat(row.totalExpense);
     return {
-      totalIncome: parseFloat(row.totalIncome),
-      totalExpense: parseFloat(row.totalExpense),
+      totalIncome,
+      totalExpense,
+      balance: totalIncome - totalExpense,
     };
   }
 

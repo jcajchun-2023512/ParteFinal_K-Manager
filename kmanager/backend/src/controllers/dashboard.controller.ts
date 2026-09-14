@@ -25,7 +25,12 @@ export class DashboardController {
         return res.status(401).json({ message: 'Usuario no autenticado' });
       }
 
-      const transactions = await dashboardService.getTransactions(userId);
+      const type = req.query.type as 'income' | 'expense' | undefined;
+      const month = req.query.month ? parseInt(req.query.month as string, 10) : undefined;
+      const year = req.query.year ? parseInt(req.query.year as string, 10) : undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+
+      const transactions = await dashboardService.getTransactions(userId, { type, month, year, limit });
       return res.status(200).json(transactions);
     } catch (error: any) {
       console.error('[DashboardController.getTransactions] Error:', error);
